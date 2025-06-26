@@ -48,18 +48,28 @@ export default function NotificationBanner({ userId }: NotificationBannerProps) 
         return;
       }
 
-      // Get VAPID public key from environment
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidPublicKey) {
-        console.error('VAPID public key not configured');
+      // Get VAPID public key from server API
+      console.log('Fetching VAPID public key from server...');
+      const vapidResponse = await fetch('/api/notifications/vapid-key');
+      if (!vapidResponse.ok) {
+        throw new Error('Failed to fetch VAPID public key');
+      }
+      
+      const { publicKey } = await vapidResponse.json();
+      console.log('VAPID public key received:', publicKey ? 'Yes' : 'No');
+      
+      if (!publicKey) {
+        console.error('VAPID public key not available from server');
         return;
       }
 
       // Subscribe to push notifications
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidPublicKey,
+        applicationServerKey: publicKey,
       });
+
+      console.log('Push subscription created:', subscription.endpoint);
 
       // Save subscription to database
       const response = await fetch('/api/notifications/subscribe', {
@@ -74,7 +84,8 @@ export default function NotificationBanner({ userId }: NotificationBannerProps) 
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save subscription');
+        const errorText = await response.text();
+        throw new Error(`Failed to save subscription: ${response.status} ${errorText}`);
       }
 
       console.log('Successfully subscribed to push notifications');

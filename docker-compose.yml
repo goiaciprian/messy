@@ -1,0 +1,12 @@
+services:
+  messym:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: goiac/messym:latest
+    container_name: messy_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env

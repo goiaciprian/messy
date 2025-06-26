@@ -1,5 +1,8 @@
 import webpush from 'web-push';
-import { env } from './configuration.app';
+import { env, validateEnv } from './configuration.app';
+
+// Validate environment variables at runtime
+validateEnv();
 
 // Configure web-push with validated environment variables
 webpush.setVapidDetails(
@@ -26,6 +29,20 @@ export async function sendPushNotification(
   }
 ) {
   try {
+    // Validate key lengths before sending
+    const p256dhBuffer = Buffer.from(subscription.p256dh, 'base64');
+    const authBuffer = Buffer.from(subscription.auth, 'base64');
+
+    if (p256dhBuffer.length !== 65) {
+      throw new Error(`Invalid p256dh key length: expected 65 bytes, got ${p256dhBuffer.length} bytes`);
+    }
+
+    if (authBuffer.length !== 16) {
+      throw new Error(`Invalid auth key length: expected 16 bytes, got ${authBuffer.length} bytes`);
+    }
+
+    // The keys from our database are already base64 encoded
+    // web-push expects them as base64 strings in the keys object
     const pushSubscription = {
       endpoint: subscription.endpoint,
       keys: {

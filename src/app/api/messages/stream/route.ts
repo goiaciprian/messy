@@ -2,8 +2,11 @@ import { NextRequest } from 'next/server';
 import { getMessages } from '~/lib/queries.drizzle';
 import { addConnection, removeConnection, type BroadcastMessage } from '~/lib/sse-manager';
 
+export const dynamic = 'force-dynamic'; // Force this endpoint to be dynamic
+
 export async function GET(request: NextRequest) {
-  console.log('SSE connection request received');
+  console.log('SSE connection request received from:', request.headers.get('user-agent'));
+  console.log('Request headers:', Object.fromEntries(request.headers.entries()));
   
   // Get the last message timestamp from query params for initial sync
   const url = new URL(request.url);
@@ -20,11 +23,24 @@ export async function GET(request: NextRequest) {
       try {
         const connectMsg = `data: ${JSON.stringify({ type: 'connected' } satisfies BroadcastMessage)}\n\n`;
         controller.enqueue(new TextEncoder().encode(connectMsg));
+        console.log('Initial connection message sent');
       } catch (error) {
         console.error('Failed to send initial connection message:', error);
         removeConnection(controller);
         return;
       }
+      
+      // Send a keepalive message every 30 seconds to prevent Cloudflare from closing the connection
+      const keepAliveInterval = setInterval(() => {
+        try {
+          const keepAliveMsg = `data: ${JSON.stringify({ type: 'keepalive', timestamp: Date.now() })}\n\n`;
+          controller.enqueue(new TextEncoder().encode(keepAliveMsg));
+        } catch (error) {
+          console.error('Failed to send keepalive message:', error);
+          clearInterval(keepAliveInterval);
+          removeConnection(controller);
+        }
+      }, 30000); // 30 seconds
       
       // If client wants messages since a certain time, send them
       if (since) {
@@ -40,6 +56,7 @@ export async function GET(request: NextRequest) {
               controller.enqueue(new TextEncoder().encode(data));
             } catch (error) {
               console.error('Failed to send historical message:', error);
+              clearInterval(keepAliveInterval);
               removeConnection(controller);
             }
           });
@@ -59,10 +76,13 @@ export async function GET(request: NextRequest) {
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Cache-Control, Content-Type',
+      'X-Accel-Buffering': 'no', // Disable nginx buffering
+      'CF-Cache-Status': 'BYPASS', // Tell Cloudflare not to cache
     },
   });
 } 

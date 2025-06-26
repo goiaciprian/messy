@@ -6,6 +6,9 @@ export type BroadcastMessage = {
   message: MessageWithUser;
 } | {
   type: 'connected';
+} | {
+  type: 'keepalive';
+  timestamp: number;
 };
 
 // Global singleton for SSE connections that persists across hot reloads
@@ -13,12 +16,9 @@ declare global {
   var __sseConnections: Set<ReadableStreamDefaultController<Uint8Array>> | undefined;
 }
 
-// Use global variable in development to persist across hot reloads
+// Use global variable to persist connections across all environments
 const connections = globalThis.__sseConnections ?? new Set<ReadableStreamDefaultController<Uint8Array>>();
-
-if (process.env.NODE_ENV === 'development') {
-  globalThis.__sseConnections = connections;
-}
+globalThis.__sseConnections = connections;
 
 // Helper function to check if a controller is still valid
 function isControllerValid(controller: ReadableStreamDefaultController<Uint8Array>): boolean {
@@ -58,6 +58,7 @@ export function addConnection(controller: ReadableStreamDefaultController<Uint8A
   
   connections.add(controller);
   console.log(`SSE connection added. Total connections: ${connections.size}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
 }
 
 // Remove a connection from the set
@@ -71,27 +72,35 @@ export function removeConnection(controller: ReadableStreamDefaultController<Uin
 
 // Helper to broadcast messages to all connected clients
 export function broadcastMessage(message: BroadcastMessage) {
-  console.log(`Broadcasting message to ${connections.size} connections:`, message);
+  console.log(`[BROADCAST] Starting broadcast to ${connections.size} connections`);
+  console.log(`[BROADCAST] Message type: ${message.type}`);
+  console.log(`[BROADCAST] Environment: ${process.env.NODE_ENV}`);
   
   if (connections.size === 0) {
-    console.warn('No active SSE connections to broadcast to');
+    console.warn('[BROADCAST] No active SSE connections to broadcast to');
     return;
   }
   
   // Clean up dead connections before broadcasting
-  cleanupDeadConnections();
+  const cleanedUp = cleanupDeadConnections();
+  console.log(`[BROADCAST] Cleaned up ${cleanedUp} dead connections before broadcast`);
   
   if (connections.size === 0) {
-    console.warn('No valid SSE connections after cleanup');
+    console.warn('[BROADCAST] No valid SSE connections after cleanup');
     return;
   }
   
   const deadConnections = new Set<ReadableStreamDefaultController<Uint8Array>>();
   let successCount = 0;
+  let attemptCount = 0;
   
   connections.forEach(controller => {
+    attemptCount++;
+    console.log(`[BROADCAST] Attempting to send to connection ${attemptCount}/${connections.size}`);
+    
     // Double-check that the controller is still valid
     if (!isControllerValid(controller)) {
+      console.log(`[BROADCAST] Connection ${attemptCount} is invalid, marking for cleanup`);
       deadConnections.add(controller);
       return;
     }
@@ -100,8 +109,9 @@ export function broadcastMessage(message: BroadcastMessage) {
       const data = `data: ${JSON.stringify(message)}\n\n`;
       controller.enqueue(new TextEncoder().encode(data));
       successCount++;
+      console.log(`[BROADCAST] Successfully sent to connection ${attemptCount}`);
     } catch (error) {
-      console.error('Failed to send message to connection:', error);
+      console.error(`[BROADCAST] Failed to send message to connection ${attemptCount}:`, error);
       deadConnections.add(controller);
     }
   });
@@ -112,10 +122,11 @@ export function broadcastMessage(message: BroadcastMessage) {
   });
   
   if (deadConnections.size > 0) {
-    console.log(`Removed ${deadConnections.size} failed connections during broadcast`);
+    console.log(`[BROADCAST] Removed ${deadConnections.size} failed connections during broadcast`);
   }
   
-  console.log(`Message broadcast successful to ${successCount} connections`);
+  console.log(`[BROADCAST] Broadcast complete: ${successCount}/${attemptCount} successful`);
+  console.log(`[BROADCAST] Active connections after broadcast: ${connections.size}`);
 }
 
 // Get the number of active connections (for debugging)

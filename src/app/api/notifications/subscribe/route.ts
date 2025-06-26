@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { saveSubscription } from '~/lib/subscription.actions';
 
+export const dynamic = 'force-dynamic'; // Force this endpoint to be dynamic
+
 export async function POST(request: NextRequest) {
   try {
     const { subscription, userId } = await request.json();

@@ -6,28 +6,47 @@ import {
   deleteSubscriptionByEndpoint 
 } from './queries.drizzle';
 
+interface SubscriptionJSON {
+  endpoint: string;
+  keys: {
+    p256dh: string | ArrayBuffer;
+    auth: string | ArrayBuffer;
+  };
+}
+
 export async function saveSubscription(
   userId: string,
-  subscription: PushSubscription
+  subscription: SubscriptionJSON
 ) {
   try {
     const endpoint = subscription.endpoint;
-    const keys = {
-    //@ts-expect-error error
-      p256dh: subscription.keys.p256dh,
-    //@ts-expect-error error
-      auth: subscription.keys.auth
-    };
+    const keys = subscription.keys;
 
-    console.log('Keys:', keys);
 
     if (!keys?.p256dh || !keys?.auth) {
       throw new Error('Invalid subscription keys');
     }
 
-    // Convert ArrayBuffer to base64
-    const p256dh = Buffer.from(keys.p256dh).toString('base64');
-    const auth = Buffer.from(keys.auth).toString('base64');
+    // The keys come from subscription.toJSON() on the client side
+    // They should already be base64 encoded strings
+    let p256dh: string;
+    let auth: string;
+
+    if (typeof keys.p256dh === 'string') {
+      // Already a base64 string
+      p256dh = keys.p256dh;
+    } else {
+      // Convert ArrayBuffer to base64
+      p256dh = Buffer.from(keys.p256dh).toString('base64');
+    }
+
+    if (typeof keys.auth === 'string') {
+      // Already a base64 string
+      auth = keys.auth;
+    } else {
+      // Convert ArrayBuffer to base64
+      auth = Buffer.from(keys.auth).toString('base64');
+    }
 
     // Check if subscription already exists
     const existingSubscription = await getSubscriptionByUserAndEndpoint(userId, endpoint);

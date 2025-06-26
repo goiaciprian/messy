@@ -45,6 +45,9 @@ export function useMessageStream({ onNewMessage, onConnectionChange }: UseMessag
           
           if (data.type === 'connected') {
             console.log('Connected to message stream');
+          } else if (data.type === 'keepalive') {
+            console.log('Keepalive received:', new Date(data.timestamp));
+            // Don't need to do anything special for keepalive
           } else if (data.type === 'new_message' && data.message) {
             console.log('New message received via SSE:', data.message);
             onNewMessage(data.message);
@@ -59,7 +62,13 @@ export function useMessageStream({ onNewMessage, onConnectionChange }: UseMessag
       eventSource.onerror = (error) => {
         console.error('SSE connection error:', error);
         console.log('EventSource readyState:', eventSource.readyState);
+        console.log('EventSource url:', eventSource.url);
         onConnectionChange(false);
+        
+        // Close the connection if it's in a bad state
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.log('EventSource is closed, will attempt to reconnect');
+        }
         
         // Attempt to reconnect with exponential backoff
         if (reconnectAttempts.current < maxReconnectAttempts) {

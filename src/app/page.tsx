@@ -5,7 +5,7 @@ import { User } from '~/lib/schema.drizzle';
 import { getUser } from '~/lib/user.actions';
 import SignInDialog from '~/components/SignInDialog';
 import ChatArea from '~/components/ChatArea';
-import InstallPrompt from '~/components/InstallPrompt';
+import NotificationBanner from '~/components/NotificationBanner';
 
 // Cookie helper functions
 const setCookie = (name: string, value: string, days: number = 30) => {
@@ -93,6 +93,9 @@ export default function Home() {
         onSignInSuccess={handleSignInSuccess}
       />
 
+      {/* Notification Banner - only show when user is signed in */}
+      {currentUser && <NotificationBanner />}
+
       {/* Chat Area */}
       {currentUser && (
         <ChatArea 
@@ -100,9 +103,6 @@ export default function Home() {
           onUserUpdate={handleUserUpdate}
         />
       )}
-      
-      {/* Install Prompt */}
-      <InstallPrompt />
     </div>
   );
 }

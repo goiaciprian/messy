@@ -94,7 +94,7 @@ export default function Home() {
       />
 
       {/* Notification Banner - only show when user is signed in */}
-      {currentUser && <NotificationBanner />}
+      {currentUser && <NotificationBanner userId={currentUser.id} />}
 
       {/* Chat Area */}
       {currentUser && (

@@ -1,6 +1,6 @@
 import { client } from './client.drizzle'
-import { users, messages, type NewUser, type NewMessage } from './schema.drizzle'
-import { eq, lt, asc } from 'drizzle-orm'
+import { users, messages, subscriptions, type NewUser, type NewMessage, type NewSubscription } from './schema.drizzle'
+import { eq, lt, asc, and } from 'drizzle-orm'
 
 
 // Create a new user
@@ -106,6 +106,54 @@ export async function getMessageById(id: string): Promise<MessageWithUser | null
     .innerJoin(users, eq(messages.userId, users.id))
     .where(eq(messages.id, id))
 
+  return result[0] || null
+}
+
+// Create a new subscription
+export async function createSubscription(subscription: NewSubscription) {
+  const result = await client.insert(subscriptions).values(subscription).returning()
+  return result[0]
+}
+
+// Get subscription by user ID and endpoint (to avoid duplicates)
+export async function getSubscriptionByUserAndEndpoint(userId: string, endpoint: string) {
+  const result = await client
+    .select()
+    .from(subscriptions)
+    .where(and(eq(subscriptions.userId, userId), eq(subscriptions.endpoint, endpoint)))
+  return result[0] || null
+}
+
+// Get all subscriptions for a user
+export async function getSubscriptionsByUserId(userId: string) {
+  const result = await client
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, userId))
+  return result
+}
+
+// Get all subscriptions (for broadcasting)
+export async function getAllSubscriptions() {
+  const result = await client.select().from(subscriptions)
+  return result
+}
+
+// Delete a subscription
+export async function deleteSubscription(id: string) {
+  const result = await client
+    .delete(subscriptions)
+    .where(eq(subscriptions.id, id))
+    .returning()
+  return result[0] || null
+}
+
+// Delete subscription by endpoint (when it becomes invalid)
+export async function deleteSubscriptionByEndpoint(endpoint: string) {
+  const result = await client
+    .delete(subscriptions)
+    .where(eq(subscriptions.endpoint, endpoint))
+    .returning()
   return result[0] || null
 }
 
